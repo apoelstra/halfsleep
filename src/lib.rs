@@ -39,7 +39,7 @@ pub fn plugin_registrar(reg: &mut Registry) {
 
 /// Create several mutated copies of a given function
 pub fn expand_mutation_test(cx: &mut ExtCtxt, _span: Span,
-                            me: &ast::MetaItem, item: P<ast::Item>)
+                            _meta: &ast::MetaItem, item: P<ast::Item>)
                            -> P<ast::Item> {
 
     // Check something sane has been decorated
@@ -61,23 +61,16 @@ pub fn expand_mutation_test(cx: &mut ExtCtxt, _span: Span,
     let mut loc = locator::Locator::new();
     loc.visit_item(&*item);
 
-    // Attach mutated functions to the AST
+    // Attach mutated functions to the module
     let mut this_mod = this_mod.clone();
     for mut_fn in loc.mutants {
         println!("pushing fn");
         this_mod.items.push(P(mut_fn))
     }
 
-    // Remove the decorator from the module so we don't get infinite recursion
-    let attrs: Vec<ast::Attribute> = item.attrs.iter().cloned().filter(|a| &*a.node.value != me).collect();
-    println!("pushing one thing {} {} ident {:?}", attrs.len(), item.attrs.len(), item.ident);
-    P(ast::Item {
-        ident: item.ident,
-        attrs: attrs,
-        id: item.id,
-        node: ast::Item_::ItemMod(this_mod),
-        vis: item.vis,
-        span: item.span
-    })
+    // Replace the module in the AST
+    let mut item = (*item).clone();
+    item.node = ast::Item_::ItemMod(this_mod);
+    P(item)
 }
 

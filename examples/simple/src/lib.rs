@@ -30,11 +30,13 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn m_bad_test() {
         assert_eq!(mutation_test_copy_of_four(4), 4);
     }
 
     #[test]
+    #[should_panic]
     fn m_good_test() {
         assert_eq!(mutation_test_copy_of_four(4), 4);
         assert_eq!(mutation_test_copy_of_four(2), 100);
