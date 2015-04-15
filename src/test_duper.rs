@@ -63,11 +63,10 @@ impl<'a> fold::Folder for TestDuper<'a> {
                             for repl in replace.iter() {
                                 let mut replacer = SingleTestDuper::new(*search, *repl);
                                 let mut new_copy = replacer.fold_item_simple(prototype.clone());
-                                let new_name = format!("_{}_mutated_for{}",
+                                let new_name = format!("_should_panic_{}_mutated_for{}",
                                                        new_copy.ident.name.as_str(),
                                                        repl.name.as_str());
                                 new_copy.ident = ast::Ident::new(token::intern(&new_name));
-println!("search replace {:?} {:?} did anything {}", search, replace, replacer.did_anything);
                                 if replacer.did_anything {
                                     copies.push(P(new_copy));
                                 } else {

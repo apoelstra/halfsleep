@@ -15,16 +15,24 @@
 use syntax::{ast, fold};
 use syntax::ptr::P;
 
-pub struct Mutator;
+use mutator::Mutator;
 
-impl Mutator {
-    /// Create a new Mutator
-    pub fn new() -> Mutator {
-        Mutator
+pub struct IfSwap;
+
+impl IfSwap {
+    /// Create a new IfSwap
+    pub fn new() -> IfSwap {
+        IfSwap
     }
 }
 
-impl fold::Folder for Mutator {
+impl Mutator for IfSwap {
+    fn rename(&self, name: &str) -> String {
+        format!("_mutate_ifswap_{}", name)
+    }
+}
+
+impl fold::Folder for IfSwap {
     fn fold_expr(&mut self, e: P<ast::Expr>) -> P<ast::Expr> {
         e.map(|e|
             match e.node {

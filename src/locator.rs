@@ -13,9 +13,7 @@
 //
 
 use std::collections::HashMap;
-use syntax::parse::token;
 use syntax::{ast, attr, visit};
-use syntax::fold::Folder;
 
 use mutator;
 
@@ -44,12 +42,9 @@ impl<'a> visit::Visitor<'a> for Locator {
             // Is this a function that we want to make mutated copies of?
             if attr::contains_name(&item.attrs, "mutation_test") {
                 // Build the mutated function
-                let mut mutator = mutator::Mutator::new();
-                let mut mut_fn = mutator.fold_item_simple(item.clone());
+                let mut_fn = mutator::mutate(&mut mutator::IfSwap::new(), item.clone());
 
-                // Change its name from the original
-                let new_name = format!("_mutated_{}", item.ident.name.as_str());
-                mut_fn.ident = ast::Ident::new(token::intern(&new_name));
+                // Add its rename to the table
                 let entry = self.name_mappings.entry(item.ident);
                 let renames = entry.or_insert(vec![]);
                 renames.push(mut_fn.ident);
