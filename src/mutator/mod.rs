@@ -16,8 +16,12 @@ use syntax::{ast, fold};
 use syntax::parse::token;
 
 pub mod if_swap;
+pub mod if_true;
+pub mod if_false;
 
 pub use self::if_swap::IfSwap;
+pub use self::if_true::IfTrue;
+pub use self::if_false::IfFalse;
 
 /// An object which is able to mutate functions passed into it, e.g.
 /// by replacing all the if statements with their negations

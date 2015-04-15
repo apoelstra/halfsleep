@@ -41,16 +41,20 @@ impl<'a> visit::Visitor<'a> for Locator {
         if let ast::Item_::ItemFn(_, _, _, _, _) = item.node {
             // Is this a function that we want to make mutated copies of?
             if attr::contains_name(&item.attrs, "mutation_test") {
-                // Build the mutated function
-                let mut_fn = mutator::mutate(&mut mutator::IfSwap::new(), item.clone());
+                macro_rules! mutate(($mutator:expr, $item:expr) => ({
+                    // Build the mutated function
+                    let mut_fn = mutator::mutate(&mut $mutator, $item.clone());
+                    // Add its rename to the table
+                    let entry = self.name_mappings.entry($item.ident);
+                    let renames = entry.or_insert(vec![]);
+                    renames.push(mut_fn.ident);
+                    // Queue it for attachment to AST
+                    self.mutants.push(mut_fn);
+                }));
 
-                // Add its rename to the table
-                let entry = self.name_mappings.entry(item.ident);
-                let renames = entry.or_insert(vec![]);
-                renames.push(mut_fn.ident);
-
-                // Queue it for attachment to AST
-                self.mutants.push(mut_fn);
+                mutate!(mutator::IfSwap::new(), item);
+                mutate!(mutator::IfTrue::new(), item);
+                mutate!(mutator::IfFalse::new(), item);
             }
         }
 

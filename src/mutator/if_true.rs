@@ -17,41 +17,44 @@ use syntax::ptr::P;
 
 use mutator::Mutator;
 
-/// A Mutator which negates `if` conditionals, effectively swapping
-/// the if and else clauses
-pub struct IfSwap;
+/// A Mutator which duplicates the bodies of `if` statements into their
+/// `else`s, effectively making them `if true`. We do it like this
+/// rather than just removing the conditional and promoting the if body
+/// to its parent because the conditional may have side effects.
+pub struct IfTrue;
 
-impl IfSwap {
-    /// Create a new IfSwap
-    pub fn new() -> IfSwap {
-        IfSwap
+impl IfTrue {
+    /// Create a new IfTrue
+    pub fn new() -> IfTrue {
+        IfTrue
     }
 }
 
-impl Mutator for IfSwap {
+impl Mutator for IfTrue {
     fn rename(&self, name: &str) -> String {
-        format!("_mutate_ifswap_{}", name)
+        format!("_mutate_iftrue_{}", name)
     }
 }
 
-impl fold::Folder for IfSwap {
+impl fold::Folder for IfTrue {
     fn fold_expr(&mut self, e: P<ast::Expr>) -> P<ast::Expr> {
         e.map(|e|
             match e.node {
-                ast::Expr_::ExprIf(expr, block, elseexpr) => {
-                    // Flip the if statement
-                    let newexpr = ast::Expr {
-                        id: expr.id,
-                        span: expr.span,
-                        node: ast::Expr_::ExprUnary(ast::UnNot, expr)
+                ast::Expr_::ExprIf(expr, block, _) => {
+                    // Create the new else clause
+                    let new_else = ast::Expr {
+                        id: ast::DUMMY_NODE_ID,
+                        node: ast::Expr_::ExprBlock(block.clone()),
+                        span: block.span
                     };
-                    let new_e = ast::Expr {
-                        id: e.id,
-                        node: ast::Expr_::ExprIf (P(newexpr), block, elseexpr),
-                        span: e.span
+                    // Modify the if statement
+                    let new_if = ast::Expr {
+                        id: ast::DUMMY_NODE_ID,
+                        span: block.span,
+                        node: ast::Expr_::ExprIf(expr, block, Some(P(new_else)))
                     };
                     // ...and continue
-                    fold::noop_fold_expr(new_e, self)
+                    fold::noop_fold_expr(new_if, self)
                 },
                 // At loops we stop recursing because I'm unsure how to guarantee
                 // that I will not cause infinite loops when screwing around in
