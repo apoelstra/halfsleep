@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 use syntax::{ast, attr, visit};
+use syntax::ext::base::Annotatable;
+use syntax::ptr::P;
 
 use mutator;
 
@@ -43,7 +45,7 @@ impl<'a> visit::Visitor<'a> for Locator {
             if attr::contains_name(&item.attrs, "mutation_test") {
                 macro_rules! mutate(($mutator:expr, $item:expr) => ({
                     // Build the mutated function
-                    let mut_fn = mutator::mutate(&mut $mutator, $item.clone());
+                    let mut_fn = mutator::mutate(&mut $mutator, Annotatable::Item(P($item.clone())));
                     // Add its rename to the table
                     let entry = self.name_mappings.entry($item.ident);
                     let renames = entry.or_insert(vec![]);

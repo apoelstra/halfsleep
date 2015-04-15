@@ -13,6 +13,7 @@
 //
 
 use syntax::{ast, fold};
+use syntax::ext::base::Annotatable;
 use syntax::parse::token;
 
 pub mod if_swap;
@@ -30,15 +31,20 @@ pub trait Mutator: fold::Folder {
 }
 
 /// Use a mutator to produce a function
-pub fn mutate<M: Mutator>(mutator: &mut M, item: ast::Item) -> ast::Item {
-    // Obtain changed name
-    let new_name = mutator.rename(item.ident.name.as_str());
-    // Mutate the function
-    let mut mut_fn = mutator.fold_item_simple(item);
-    // Insert changed name
-    mut_fn.ident = ast::Ident::new(token::intern(&new_name));
-    // Return
-    mut_fn
+pub fn mutate<M: Mutator>(mutator: &mut M, item: Annotatable) -> ast::Item {
+    match item {
+        Annotatable::Item(item) => {
+            // Obtain changed name
+            let new_name = mutator.rename(item.ident.name.as_str());
+            // Mutate the function
+            let mut mut_fn = mutator.fold_item_simple((*item).clone());
+            // Insert changed name
+            mut_fn.ident = ast::Ident::new(token::intern(&new_name));
+            // Return
+            mut_fn
+        },
+        _ => unimplemented!()
+    }
 }
 
 
