@@ -72,8 +72,6 @@ pub fn expand_mutation_test(cx: &mut ExtCtxt, _span: Span,
         println!("pushing fn");
         this_mod.items.push(P(mut_fn))
     }
-    // Expand all macros in the module so that we can see all the function calls
-    let this_mod = cx.expander().fold_mod(this_mod);
     // Put the module into an item struct
     let mut item = (*item).clone();
     item.node = ast::Item_::ItemMod(this_mod);

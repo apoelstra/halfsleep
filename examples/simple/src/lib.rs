@@ -1,9 +1,8 @@
 
-#![feature(std_misc)]
 #![feature(custom_attribute, plugin)]
 
 #![plugin(halfsleep)]
-#![mutation_test]
+#![cfg_attr(test, mutation_test)]
 
 #[mutation_test]
 pub fn four(n: u32) -> u32 {

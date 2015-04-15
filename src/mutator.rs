@@ -57,6 +57,13 @@ impl fold::Folder for Mutator {
             }
         )
     }
+
+    fn fold_mac(&mut self, _mac: ast::Mac) -> ast::Mac {
+        // do nothing -- we have to implement this though because the
+        // compiler will yell at us about using a Folder prior to
+        // macro expansion otherwise ("here be dragons")
+        fold::noop_fold_mac(_mac, self)
+    }
 }
 
 
