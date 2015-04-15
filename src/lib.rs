@@ -17,17 +17,20 @@
 extern crate rustc;
 extern crate syntax;
 
+use std::mem;
 use rustc::plugin::Registry;
 use syntax::ext::base::Modifier;
 use syntax::parse::token;
 use syntax::ast;
 use syntax::codemap::Span;
 use syntax::ext::base::ExtCtxt;
+use syntax::fold::Folder;
 use syntax::ptr::P;
 use syntax::visit::Visitor;
 
 mod locator;
 mod mutator;
+mod test_duper;
 
 #[plugin_registrar]
 #[doc(hidden)]
@@ -61,16 +64,23 @@ pub fn expand_mutation_test(cx: &mut ExtCtxt, _span: Span,
     let mut loc = locator::Locator::new();
     loc.visit_item(&*item);
 
-    // Attach mutated functions to the module
     let mut this_mod = this_mod.clone();
-    for mut_fn in loc.mutants {
+    // Attach mutated functions to the module
+    let mut fn_list = vec![];
+    mem::swap(&mut loc.mutants, &mut fn_list);
+    for mut_fn in fn_list {
         println!("pushing fn");
         this_mod.items.push(P(mut_fn))
     }
-
-    // Replace the module in the AST
+    // Expand all macros in the module so that we can see all the function calls
+    let this_mod = cx.expander().fold_mod(this_mod);
+    // Put the module into an item struct
     let mut item = (*item).clone();
     item.node = ast::Item_::ItemMod(this_mod);
-    P(item)
+
+    // Add new unit tests...
+    let mut test_duper = test_duper::TestDuper::new(&loc);
+    // ...and replace the module in the AST
+    P(test_duper.fold_item_simple(item))
 }
 

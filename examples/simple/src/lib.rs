@@ -1,4 +1,5 @@
 
+#![feature(std_misc)]
 #![feature(custom_attribute, plugin)]
 
 #![plugin(halfsleep)]
@@ -15,8 +16,7 @@ pub fn four(n: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::four;
-    use super::mutation_test_copy_of_four;
+    use super::*;
 
     #[test]
     fn good_test() {
@@ -27,19 +27,6 @@ mod tests {
     #[test]
     fn bad_test() {
         assert_eq!(four(4), 4);
-    }
-
-    #[test]
-    #[should_panic]
-    fn m_bad_test() {
-        assert_eq!(mutation_test_copy_of_four(4), 4);
-    }
-
-    #[test]
-    #[should_panic]
-    fn m_good_test() {
-        assert_eq!(mutation_test_copy_of_four(4), 4);
-        assert_eq!(mutation_test_copy_of_four(2), 100);
     }
 }
 

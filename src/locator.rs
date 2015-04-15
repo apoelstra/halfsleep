@@ -12,6 +12,7 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
+use std::collections::HashMap;
 use syntax::parse::token;
 use syntax::{ast, attr, visit};
 use syntax::fold::Folder;
@@ -19,14 +20,19 @@ use syntax::fold::Folder;
 use mutator;
 
 pub struct Locator {
-    pub mutants: Vec<ast::Item>
+    /// A list of mutated functions that need to be inserted into the AST
+    pub mutants: Vec<ast::Item>,
+    /// A mapping from function names to lists of names of their mutated
+    /// variants
+    pub name_mappings: HashMap<ast::Ident, Vec<ast::Ident>>,
 }
 
 impl Locator {
     /// Create a new Mutator
     pub fn new() -> Locator {
         Locator {
-            mutants: vec![]
+            mutants: vec![],
+            name_mappings: HashMap::new(),
         }
     }
 }
@@ -35,14 +41,19 @@ impl<'a> visit::Visitor<'a> for Locator {
     fn visit_item(&mut self, item: &'a ast::Item) {
         // If we find a function, record it
         if let ast::Item_::ItemFn(_, _, _, _, _) = item.node {
+            // Is this a function that we want to make mutated copies of?
             if attr::contains_name(&item.attrs, "mutation_test") {
-                println!("found fn {:}", item.ident.to_string());
-
                 // Build the mutated function
                 let mut mutator = mutator::Mutator::new();
                 let mut mut_fn = mutator.fold_item_simple(item.clone());
+
                 // Change its name from the original
-                mut_fn.ident = ast::Ident::new(token::intern(&format!("mutation_test_copy_of_{}", item.ident.name.as_str())));
+                let new_name = format!("_mutated_{}", item.ident.name.as_str());
+                mut_fn.ident = ast::Ident::new(token::intern(&new_name));
+                let entry = self.name_mappings.entry(item.ident);
+                let renames = entry.or_insert(vec![]);
+                renames.push(mut_fn.ident);
+
                 // Queue it for attachment to AST
                 self.mutants.push(mut_fn);
             }
@@ -58,5 +69,4 @@ impl<'a> visit::Visitor<'a> for Locator {
         // macro expansion otherwise ("here be dragons")
     }
 }
-
 
