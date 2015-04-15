@@ -42,7 +42,7 @@ impl<'a> visit::Visitor<'a> for Locator {
         // If we find a function, record it
         if let ast::Item_::ItemFn(_, _, _, _, _) = item.node {
             // Is this a function that we want to make mutated copies of?
-            if attr::contains_name(&item.attrs, "mutation_test") {
+            if attr::contains_name(&item.attrs, "mutate") {
                 macro_rules! mutate(($mutator:expr, $item:expr) => ({
                     // Build the mutated function
                     let mut_fn = mutator::mutate(&mut $mutator, Annotatable::Item(P($item.clone())));

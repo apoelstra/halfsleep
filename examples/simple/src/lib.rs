@@ -4,7 +4,7 @@
 #![plugin(halfsleep)]
 #![cfg_attr(test, mutation_test)]
 
-#[mutation_test]
+#[mutate]
 pub fn four(n: u32) -> u32 {
     if n == 4 {
         4

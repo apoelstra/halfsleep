@@ -38,59 +38,75 @@ pub fn plugin_registrar(reg: &mut Registry) {
     reg.register_syntax_extension(
         token::intern("mutation_test"),
         MultiModifier(Box::new(expand_mutation_test)));
+
+    reg.register_syntax_extension(
+        token::intern("mutate"),
+        MultiModifier(Box::new(expand_mutate)));
 }
 
-/// emit a warning for #[mutation_test] markers on things which don't use them
-fn complain_if_useless_annotation(cx: &mut ExtCtxt, item: &Annotatable) {
-    let (warn, sp) = match *item {
+/// check whether an annotation is on a function or function-like object
+fn annotation_is_fn(item: &Annotatable) -> bool {
+    match *item {
         Annotatable::Item(ref i) => {
-            (match i.node {
-                 ast::Item_::ItemMod(_) | ast::Item_::ItemFn(_, _, _, _, _) => false,
-                 _ => true
-             }, i.span)
+            match i.node {
+                ast::Item_::ItemMod(_) | ast::Item_::ItemFn(_, _, _, _, _) => true,
+                _ => false
+            }
         },
         Annotatable::TraitItem(ref i) => {
-            (match i.node {
-                 ast::TraitItem_::MethodTraitItem(_, _) => false,
-                 _ => true
-             }, i.span)
+            match i.node {
+                ast::TraitItem_::MethodTraitItem(_, _) => true,
+                _ => false
+            }
         },
         Annotatable::ImplItem(ref i) => {
-            (match i.node {
-                 ast::ImplItem_::MethodImplItem(_, _) => false,
-                 _ => true
-             }, i.span)
+            match i.node {
+                ast::ImplItem_::MethodImplItem(_, _) => true,
+                _ => false
+            }
         }
-    };
-
-    if warn {
-        cx.span_warn(sp, "#[mutation_test] has no effect except on modules and functions");
     }
 }
 
-/// Create several mutated copies of a given function
-pub fn expand_mutation_test(cx: &mut ExtCtxt, _span: Span,
+/// This is an annotation on functions; we do not use the syntax extender
+/// to handle these, rather we do our own AST walk when parsing #[mutation_test]
+/// on the module. So all this does is emit warnings for.
+pub fn expand_mutate(cx: &mut ExtCtxt, decorator_span: Span,
+                     _meta: &ast::MetaItem, item: Annotatable)
+                    -> Annotatable {
+    if !annotation_is_fn(&item) {
+        cx.span_warn(decorator_span, "#[mutate] has no effect except functions and methods");
+    }
+    item
+}
+
+/// This annotation should only be applied to modules
+pub fn expand_mutation_test(cx: &mut ExtCtxt, decorator_span: Span,
                             _meta: &ast::MetaItem, item: Annotatable)
                            -> Annotatable {
 
-    complain_if_useless_annotation(cx, &item);
-
-    // Check something sane has been decorated
-    let this_mod = if let Annotatable::Item(ref ast_item) = item {
-        if let ast::ItemMod(ref this_mod) = ast_item.node {
-            this_mod
-        } else {
-            // We do nothing directly for decorated functions; when looking at
-            // a module we make a note of which ones are decorated, then consider
-            // them all at once. This lets us (a) keep track of how many should-fail
-            // test have been created and (b) locate all the unit tests in the
-            // first place.
-            // TODO: this clone is a lazy way around lack of non-lexically scoped borrows
-            return item.clone();
-        }
+    // Ensure that we are actually looking at a module
+    let this_mod = match item {
+        Annotatable::Item(ref ast_item) => {
+            if let ast::ItemMod(ref this_mod) = ast_item.node {
+                Some(this_mod.clone())
+            } else {
+                None
+            }
+        },
+        _ => None
+    };
+    // Is there a less awkward way to do this?
+    let mut this_mod = if let Some(this_mod) = this_mod {
+        this_mod
     } else {
-        // TODO: this clone is a lazy way around lack of non-lexically scoped borrows
-        return item.clone();
+        if annotation_is_fn(&item) {
+            cx.span_warn(decorator_span, concat!("#[mutation_test] can only be applied to modules; to ",
+                                                 "mark a function for mutation use #[mutate]"));
+        } else {
+            cx.span_warn(decorator_span, "#[mutation_test] can only be applied to modules");
+        }
+        return item;
     };
 
     // At this point we know we are looking at a module
@@ -99,7 +115,6 @@ pub fn expand_mutation_test(cx: &mut ExtCtxt, _span: Span,
     let mut loc = locator::Locator::new();
     loc.visit_item(&*item);
 
-    let mut this_mod = this_mod.clone();
     // Attach mutated functions to the module
     let mut fn_list = vec![];
     mem::swap(&mut loc.mutants, &mut fn_list);

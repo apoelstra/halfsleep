@@ -7,12 +7,11 @@ simple but breaking ways. If the unit tests still pass, they weren't sufficient.
 
 Rust's syntax extension abilities are powerful enough to do this without the
 need for any additional tools. The way it works is as follows: on any modules
-marked `#[mutation_test]`, it finds functions marked `#[mutation_test]` and
-creates copies of them which are mutated in various ways. Then any unit tests
-in the module which call those functions are duplicated to use the mutated
-variant and marked `#[should_panic]` under the expectation that they will now
-fail. (Any tests already marked `#[should_panic]` are ignored rather than
-duplicated.)
+marked `#[mutation_test]`, it finds functions marked `#[mutate]` and creates
+copies of them which are mutated in various ways. Then any unit tests in the
+module which call those functions are duplicated to use the mutated variant
+and marked `#[should_panic]` under the expectation that they will now fail.
+(Any tests already marked `#[should_panic]` are ignored rather than duplicated.)
 
 ### Experimental and Unstable
 
@@ -37,7 +36,7 @@ Here is an example project using halfsleep:
 #![plugin(halfsleep)]
 #![cfg_attr(test, mutation_test)]
 
-#[mutation_test]
+#[mutate]
 pub fn keep_fours(n: u32) -> u32 {
     if n == 4 { 4 } else { 100 }
 }
