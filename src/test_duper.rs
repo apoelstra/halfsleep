@@ -12,22 +12,26 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
+use std::iter;
 use syntax::{ast, attr, codemap, fold};
 use syntax::parse::token;
 use syntax::ptr::P;
 use syntax::util::small_vector::SmallVector;
 
 use locator;
+use util;
 
 pub struct TestDuper<'a> {
-    loc: &'a locator::Locator
+    loc: &'a locator::Locator,
+    depth: usize
 }
 
 impl<'a> TestDuper<'a> {
     /// Create a new unit test duplicator
     pub fn new(loc: &'a locator::Locator) -> TestDuper<'a> {
         TestDuper {
-            loc: loc
+            loc: loc,
+            depth: 0
         }
     }
 }
@@ -60,12 +64,12 @@ impl<'a> fold::Folder for TestDuper<'a> {
 
                         // Run through each mutated fn
                         for (search, replace) in self.loc.name_mappings.iter() {
-                            for repl in replace.iter() {
-                                let mut replacer = SingleTestDuper::new(*search, *repl);
+                            for path in replace.iter().cloned() {
+                                let mut replacer = SingleTestDuper::new(*search, &path, self.depth);
                                 let mut new_copy = replacer.fold_item_simple(prototype.clone());
                                 let new_name = format!("_should_panic_{}_mutated_for{}",
                                                        new_copy.ident.name.as_str(),
-                                                       repl.name.as_str());
+                                                       path.last().unwrap().identifier.name.as_str());
                                 new_copy.ident = ast::Ident::new(token::intern(&new_name));
                                 if replacer.did_anything {
                                     copies.push(P(new_copy));
@@ -93,6 +97,13 @@ impl<'a> fold::Folder for TestDuper<'a> {
                     SmallVector::one(item)
                 }
             },
+            // For modules we need to track depth
+            ast::Item_::ItemMod(_) => {
+                self.depth += 1;
+                let ret = fold::noop_fold_item(item, self);
+                self.depth -= 1;
+                ret
+            }
             // Everything else just continue folding
             _ => fold::noop_fold_item(item, self)
         }
@@ -108,15 +119,17 @@ impl<'a> fold::Folder for TestDuper<'a> {
 
 /// A SingleTestDuper goes through a function replacing all calls to
 /// the function `search` with calls to `replace`
-struct SingleTestDuper {
+struct SingleTestDuper<'a> {
+    depth: usize,
     search: ast::Ident,
-    replace: ast::Ident,
+    replace: &'a [ast::PathSegment],
     did_anything: bool
 }
 
-impl SingleTestDuper {
-    fn new(search: ast::Ident, replace: ast::Ident) -> SingleTestDuper {
+impl<'a> SingleTestDuper<'a> {
+    fn new(search: ast::Ident, replace: &'a [ast::PathSegment], depth: usize) -> SingleTestDuper {
         SingleTestDuper {
+            depth: depth,
             search: search,
             replace: replace,
             did_anything: false
@@ -124,7 +137,7 @@ impl SingleTestDuper {
     }
 }
 
-impl fold::Folder for SingleTestDuper {
+impl<'a> fold::Folder for SingleTestDuper<'a> {
     fn fold_path(&mut self, path: ast::Path) -> ast::Path {
         // TODO: can we sensibly support segments of length > 1? For that
         //       matter, we are comparing names, which is unhygienic; is
@@ -135,32 +148,51 @@ impl fold::Folder for SingleTestDuper {
             // mark this SingleTestDuper as successful
             self.did_anything = true;
             // search-and-replace
-            let mut new_path = path.clone();
-            new_path.segments[0].identifier = self.replace;
-            new_path
+            // compute relative path
+            let mut segments = vec![util::str_to_pathseg("super"); self.depth];
+            // ...(skip the first element of the replace path since that is the common ancestor)
+            segments.extend(self.replace.iter().skip(1).cloned());
+            ast::Path {
+                span: codemap::DUMMY_SP,
+                global: false,
+                segments: segments
+            }
         } else {
             path
         }
     }
 
-    fn fold_tt(&mut self, tt: &ast::TokenTree) -> ast::TokenTree {
-        match *tt {
-            ast::TokenTree::TtToken(span, ref tok) => {
-                if let token::Token::Ident(ref ident, style) = *tok {
-                    if ident.name == self.search.name {
-                        // mark this SingleTestDuper as successful
-                        self.did_anything = true;
-                        // search-and-replace
-                        ast::TokenTree::TtToken(span, token::Token::Ident(self.replace, style))
+    fn fold_tts(&mut self, tts: &[ast::TokenTree]) -> Vec<ast::TokenTree> {
+        let mut ret = vec![];
+        for tt in tts.iter() {
+            match *tt {
+                ast::TokenTree::TtToken(span, ref tok) => {
+                    if let token::Token::Ident(ref ident, _) = *tok {
+                        if ident.name == self.search.name {
+                            // mark this SingleTestDuper as successful
+                            self.did_anything = true;
+                            // build super::super::mod::mod::mod::ident path
+                            let mut except_first = false;
+                            for seg in iter::repeat(util::str_to_pathseg("super"))
+                                           .take(self.depth)
+                                           .chain(self.replace.iter().skip(1).cloned()) {
+                                if except_first {
+                                    ret.push(ast::TokenTree::TtToken(span, token::Token::ModSep));
+                                }
+                                except_first = true;
+                                ret.push(ast::TokenTree::TtToken(span, token::Token::Ident(seg.identifier, token::IdentStyle::ModName)));
+                            }
+                        } else {
+                            ret.push(self.fold_tt(tt))
+                        }
                     } else {
-                        fold::noop_fold_tt(tt, self)
+                        ret.push(self.fold_tt(tt))
                     }
-                } else {
-                    fold::noop_fold_tt(tt, self)
                 }
+                _ => ret.push(self.fold_tt(tt))
             }
-            _ => fold::noop_fold_tt(tt, self)
         }
+        ret
     }
 
     fn fold_mac(&mut self, _mac: ast::Mac) -> ast::Mac {

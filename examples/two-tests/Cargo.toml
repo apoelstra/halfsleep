@@ -1,6 +1,6 @@
 
 [package]
-name = "simple"
+name = "two-tests"
 version = "0.0.1"
 authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>"]
 

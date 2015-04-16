@@ -43,7 +43,7 @@ pub fn keep_fours(n: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::keep_fours;
 
     #[test]
     fn bad_test() {
@@ -52,9 +52,16 @@ mod tests {
 }
 
 ```
-(TODO:
-Notice the `use super::*`; a current limitation of halfsleep that should be
-eliminated shortly is that it simply renames function calls to the mutated
-variants without respect for module boundaries. In future halfsleep should
-provide full paths to the functions it creates.)
+After running `cargo test` on this project, we get the output
+```
+running 4 tests
+test tests::bad_test ... ok
+test tests::_should_panic_bad_test_mutated_for_mutate_ifswap_keep_fours ... ok
+test tests::_should_panic_bad_test_mutated_for_mutate_iffalse_keep_fours ... ok
+test tests::_should_panic_bad_test_mutated_for_mutate_iftrue_keep_fours ... FAILED
+```
+We see that our single unit test has become four, and that the `iftrue` one has failed.
+This means that even after replacing `if n == 4` with `if true` the unit test passed,
+so our unit test was not testing the if statement completely.
+
 

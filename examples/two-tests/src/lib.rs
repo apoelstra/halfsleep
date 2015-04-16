@@ -15,7 +15,7 @@ pub fn four(n: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::four;
 
     #[test]
     fn good_test() {

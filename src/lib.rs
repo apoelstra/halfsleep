@@ -31,6 +31,7 @@ use syntax::visit::Visitor;
 mod locator;
 mod mutator;
 mod test_duper;
+mod util;
 
 #[plugin_registrar]
 #[doc(hidden)]
@@ -119,7 +120,6 @@ pub fn expand_mutation_test(cx: &mut ExtCtxt, decorator_span: Span,
     let mut fn_list = vec![];
     mem::swap(&mut loc.mutants, &mut fn_list);
     for mut_fn in fn_list {
-        println!("pushing fn");
         this_mod.items.push(P(mut_fn))
     }
     // Put the module into an item struct
