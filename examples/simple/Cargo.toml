@@ -1,0 +1,9 @@
+
+[package]
+name = "simple"
+version = "0.0.1"
+authors = ["Andrew Poelstra <apoelstra@wpsoftware.net>"]
+
+[dependencies.halfsleep]
+path = "../../"
+
