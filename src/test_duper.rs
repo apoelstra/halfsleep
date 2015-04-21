@@ -12,6 +12,8 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
+use aster;
+use std::collections::HashMap;
 use std::iter;
 use syntax::{ast, attr, codemap, fold};
 use syntax::parse::token;
@@ -22,8 +24,12 @@ use locator;
 use util;
 
 pub struct TestDuper<'a> {
+    /// The locator which knows all the search/replace mappings
     loc: &'a locator::Locator,
-    depth: usize
+    /// A stack which is used to track unit test creation. Basically for
+    /// each search/replace pair it finds all unit tests with `search`,
+    /// copies them into a new supertest, and replaces `search` with `replace`
+    test_stack: Vec<HashMap<(&'a ast::Ident, Vec<ast::PathSegment>), Vec<ast::Item>>>
 }
 
 impl<'a> TestDuper<'a> {
@@ -31,7 +37,7 @@ impl<'a> TestDuper<'a> {
     pub fn new(loc: &'a locator::Locator) -> TestDuper<'a> {
         TestDuper {
             loc: loc,
-            depth: 0
+            test_stack: vec![],
         }
     }
 }
@@ -45,34 +51,21 @@ impl<'a> fold::Folder for TestDuper<'a> {
                 if attr::contains_name(&item.attrs, "test") {
                     // Is it a normal (not should_panic) test?
                     if !attr::contains_name(&item.attrs, "should_panic") {
-                        // Create copy, put unadulterated copy into the list of unit tests
-                        let mut prototype = (*item).clone();
-                        let mut copies = vec![P(prototype.clone())];
-                        // Make remaining copies should_panic, as they will be mutated
-                        prototype.attrs.push(codemap::Spanned {
-                            node: ast::Attribute_ {
-                                id: attr::mk_attr_id(),
-                                style: ast::AttrStyle::AttrOuter,
-                                value: P(codemap::Spanned {
-                                    node: ast::MetaItem_::MetaWord(token::intern_and_get_ident("should_panic")),
-                                    span: codemap::DUMMY_SP
-                                }),
-                                is_sugared_doc: false
-                            },
-                            span: codemap::DUMMY_SP
-                        });
-
                         // Run through each mutated fn
                         for (search, replace) in self.loc.name_mappings.iter() {
                             for path in replace.iter().cloned() {
-                                let mut replacer = SingleTestDuper::new(*search, &path, self.depth);
-                                let mut new_copy = replacer.fold_item_simple(prototype.clone());
-                                let new_name = format!("_should_panic_{}_mutated_for{}",
-                                                       new_copy.ident.name.as_str(),
-                                                       path.last().unwrap().identifier.name.as_str());
-                                new_copy.ident = ast::Ident::new(token::intern(&new_name));
+                                let mut replacer = SingleTestDuper::new(*search, &path, self.test_stack.len());
+                                let new_copy = replacer.fold_item_simple((*item).clone());
+                                // No need to rename since the copies will be in (separate) local scopes
                                 if replacer.did_anything {
-                                    copies.push(P(new_copy));
+                                    // Put it into the list of unit tests for this search/replace pair
+                                    // This list will contain all unit tests for this pairing (so one
+                                    // per each original unit test) and they will all be combined in
+                                    // the end. This way we test "each replacement causes at least -one-
+                                    // unit test to fail" rather than demanding they all do, which is wrong.
+                                    let entry = self.test_stack.last_mut().unwrap().entry((&search, path.clone()));
+                                    let tests = entry.or_insert(vec![]);
+                                    tests.push(new_copy);
                                 } else {
                                     // if it did nothing for this search->replace mapping,
                                     // changing the replacement won't make it do something,
@@ -85,7 +78,7 @@ impl<'a> fold::Folder for TestDuper<'a> {
                         // Note that we do not recurse into the unit tests; it appears that
                         // nested unit tests are not run (and who would do this??) so we do
                         // not bother duplicating them.
-                        SmallVector::many(copies)
+                        SmallVector::one(item)
                     } else {
                         // ...nor do we recurse for should_panic tests...
                         SmallVector::one(item)
@@ -99,10 +92,36 @@ impl<'a> fold::Folder for TestDuper<'a> {
             },
             // For modules we need to track depth
             ast::Item_::ItemMod(_) => {
-                self.depth += 1;
-                let ret = fold::noop_fold_item(item, self);
-                self.depth -= 1;
-                ret
+                // Setup a stack frame
+                self.test_stack.push(HashMap::new());
+                // Recurse to obtain list of tests
+                let mut ret = fold::noop_fold_item_simple((*item).clone(), self);
+                // Build a new test for each search/replace pair
+                for (&(ref search, ref path), test_list) in self.test_stack.last().unwrap().iter() {
+                    // Build test function
+                    let mut fn_ = aster::AstBuilder::new()
+                                      .item()
+                                      .attr().word("test")
+                                      .attr().word("should_panic")
+                                      .fn_(format!("_mutation_test_change_{}_to{}",
+                                                   search.name.as_str(),
+                                                   path.last().unwrap().identifier.name.as_str()))
+                                      .build(ast::FunctionRetTy::DefaultReturn(codemap::DUMMY_SP))
+                                      .block();
+                    for test in test_list.iter() {
+                        fn_ = fn_.stmt().build_item(P(test.clone()));
+                        fn_ = fn_.stmt().semi().call().id(test.ident).build();
+                    }
+                    // Install it
+                    if let ast::Item_::ItemMod(ref mut m) = ret.node {
+                        m.items.push(fn_.build());
+                    } else {
+                        unreachable!()
+                    }
+                }
+                // Delete the stack frame
+                self.test_stack.pop();
+                SmallVector::one(P(ret))
             }
             // Everything else just continue folding
             _ => fold::noop_fold_item(item, self)

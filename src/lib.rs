@@ -14,6 +14,7 @@
 
 #![feature(custom_derive, plugin, plugin_registrar, rustc_private)]
 
+extern crate aster;
 extern crate rustc;
 extern crate syntax;
 
