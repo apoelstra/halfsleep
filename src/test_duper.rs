@@ -169,8 +169,7 @@ impl<'a> fold::Folder for SingleTestDuper<'a> {
             // search-and-replace
             // compute relative path
             let mut segments = vec![util::str_to_pathseg("super"); self.depth];
-            // ...(skip the first element of the replace path since that is the common ancestor)
-            segments.extend(self.replace.iter().skip(1).cloned());
+            segments.extend(self.replace.iter().cloned());
             ast::Path {
                 span: codemap::DUMMY_SP,
                 global: false,
@@ -194,7 +193,7 @@ impl<'a> fold::Folder for SingleTestDuper<'a> {
                             let mut except_first = false;
                             for seg in iter::repeat(util::str_to_pathseg("super"))
                                            .take(self.depth)
-                                           .chain(self.replace.iter().skip(1).cloned()) {
+                                           .chain(self.replace.iter().cloned()) {
                                 if except_first {
                                     ret.push(ast::TokenTree::TtToken(span, token::Token::ModSep));
                                 }

@@ -18,7 +18,6 @@ extern crate aster;
 extern crate rustc;
 extern crate syntax;
 
-use std::mem;
 use rustc::plugin::Registry;
 use syntax::ext::base::{Annotatable, MultiModifier};
 use syntax::parse::token;
@@ -27,7 +26,6 @@ use syntax::codemap::Span;
 use syntax::ext::base::ExtCtxt;
 use syntax::fold::Folder;
 use syntax::ptr::P;
-use syntax::visit::Visitor;
 
 mod locator;
 mod mutator;
@@ -99,9 +97,7 @@ pub fn expand_mutation_test(cx: &mut ExtCtxt, decorator_span: Span,
         _ => None
     };
     // Is there a less awkward way to do this?
-    let mut this_mod = if let Some(this_mod) = this_mod {
-        this_mod
-    } else {
+    if this_mod.is_none() {
         if annotation_is_fn(&item) {
             cx.span_warn(decorator_span, concat!("#[mutation_test] can only be applied to modules; to ",
                                                  "mark a function for mutation use #[mutate]"));
@@ -112,20 +108,10 @@ pub fn expand_mutation_test(cx: &mut ExtCtxt, decorator_span: Span,
     };
 
     // At this point we know we are looking at a module
-    // Locate all the decorated functions
-    let item = if let Annotatable::Item(i) = item { i } else { unreachable!() };
+    // Run through the module duplicating and marring annotated functions
+    let item = item.expect_item();
     let mut loc = locator::Locator::new();
-    loc.visit_item(&*item);
-
-    // Attach mutated functions to the module
-    let mut fn_list = vec![];
-    mem::swap(&mut loc.mutants, &mut fn_list);
-    for mut_fn in fn_list {
-        this_mod.items.push(P(mut_fn))
-    }
-    // Put the module into an item struct
-    let mut item = (*item).clone();
-    item.node = ast::Item_::ItemMod(this_mod);
+    let item = loc.fold_item_simple((*item).clone());
 
     // Add new unit tests...
     let mut test_duper = test_duper::TestDuper::new(&loc);
