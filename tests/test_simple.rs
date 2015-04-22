@@ -13,8 +13,9 @@ mod tests {
     use super::keep_fours;
 
     #[test]
-    fn bad_test() {
+    fn test() {
         assert_eq!(keep_fours(4), 4);
+        assert_eq!(keep_fours(2), 100);
     }
 }
 
