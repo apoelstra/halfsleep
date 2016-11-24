@@ -12,7 +12,7 @@
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
 
-#![feature(custom_derive, plugin, plugin_registrar, rustc_private)]
+#![allow(custom_derive, plugin, plugin_registrar, rustc_private)]
 
 extern crate aster;
 extern crate rustc;
